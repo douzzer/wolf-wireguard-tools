@@ -134,7 +134,7 @@ set_mtu_up() {
 		[[ ( $output =~ mtu\ ([0-9]+) || ( $output =~ dev\ ([^ ]+) && $(ip link show dev "${BASH_REMATCH[1]}") =~ mtu\ ([0-9]+) ) ) && ${BASH_REMATCH[1]} -gt $mtu ]] && mtu="${BASH_REMATCH[1]}"
 	done < <(wg show "$INTERFACE" endpoints)
 	if [[ $mtu -eq 0 ]]; then
-		read -r output < <(ip route show default || true) || true
+		read -r output < <(ip route show default) || true
 		[[ ( $output =~ mtu\ ([0-9]+) || ( $output =~ dev\ ([^ ]+) && $(ip link show dev "${BASH_REMATCH[1]}") =~ mtu\ ([0-9]+) ) ) && ${BASH_REMATCH[1]} -gt $mtu ]] && mtu="${BASH_REMATCH[1]}"
 	fi
 	[[ $mtu -gt 0 ]] || mtu=1500
