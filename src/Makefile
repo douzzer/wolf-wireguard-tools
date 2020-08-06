@@ -62,6 +62,11 @@ LDLIBS += -lws2_32
 wg: wincompat/libc.o wincompat/init.o
 endif
 
+ifdef WOLFCRYPT
+CFLAGS += -DUSE_WOLFCRYPT $(shell PKG_CONFIG_PATH=/usr/local/lib/pkgconfig:${PKG_CONFIG_PATH} $(PKG_CONFIG) --cflags wolfssl)
+LDLIBS += $(shell PKG_CONFIG_PATH=/usr/local/lib/pkgconfig:${PKG_CONFIG_PATH} $(PKG_CONFIG) --libs wolfssl)
+endif
+
 ifneq ($(V),1)
 BUILT_IN_LINK.o := $(LINK.o)
 LINK.o = @echo "  LD      $@";
@@ -73,7 +78,11 @@ BUILT_IN_RM := $(RM)
 RM := @a() { echo "  CLEAN   $$@"; $(BUILT_IN_RM) "$$@"; }; a
 endif
 
-wg: $(sort $(patsubst %.c,%.o,$(wildcard *.c)))
+ifdef WOLFCRYPT
+wg: $(sort $(patsubst %.c,%.o,wolfcrypto_shim.c $(filter-out curve25519.c genkey.c, $(wildcard *.c))))
+else
+wg: $(sort $(patsubst %.c,%.o,$(filter-out wolfcrypto_shim.c, $(wildcard *.c))))
+endif
 
 clean:
 	$(RM) wg *.o *.d
