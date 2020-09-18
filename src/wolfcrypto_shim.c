@@ -4,9 +4,9 @@
 #include "containers.h"
 
 void curve25519_generate_public_wolfshim(uint8_t pub[static CURVE25519_KEY_SIZE], const uint8_t secret[static CURVE25519_KEY_SIZE]) {
-    uint8_t secret_copy[CURVE25519_KEY_SIZE]; /* pubkey_main() calls curve25519_generate_public() with pub == secret, which doesn't work for wc_curve25519(). */
+    uint8_t secret_copy[CURVE25519_KEY_SIZE]; /* pubkey_main() calls curve25519_generate_public() with pub == secret, which doesn't work for wc_curve25519_make_pub(). */
     XMEMCPY(secret_copy, secret, CURVE25519_KEY_SIZE);
-    int ret = wc_curve25519(CURVE25519_KEY_SIZE, pub, CURVE25519_KEY_SIZE, secret_copy);
+    int ret = wc_curve25519_make_pub(CURVE25519_KEY_SIZE, pub, CURVE25519_KEY_SIZE, secret_copy);
     if (ret) {
         fprintf(stderr,"curve25519 public key calculation failed: %s\n", wc_GetErrorString(ret));
         abort();
