@@ -12,3 +12,4 @@ src/wg.exe
 *.til
 *.pro.user
 maint/
+*~
