@@ -63,8 +63,13 @@ wg: wincompat/libc.o wincompat/init.o
 endif
 
 ifdef WOLFCRYPT
+ifdef WOLFSSL_ROOT
+CFLAGS += -DUSE_WOLFCRYPT -I$(WOLFSSL_ROOT)
+LDLIBS += -L$(WOLFSSL_ROOT)/src/.libs -lwolfssl
+else
 CFLAGS += -DUSE_WOLFCRYPT $(shell PKG_CONFIG_PATH=/usr/local/lib/pkgconfig:${PKG_CONFIG_PATH} $(PKG_CONFIG) --cflags wolfssl)
 LDLIBS += $(shell PKG_CONFIG_PATH=/usr/local/lib/pkgconfig:${PKG_CONFIG_PATH} $(PKG_CONFIG) --libs wolfssl)
+endif
 endif
 
 ifneq ($(V),1)

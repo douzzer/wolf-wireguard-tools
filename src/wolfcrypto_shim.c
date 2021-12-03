@@ -51,7 +51,7 @@ int genkey_main(int argc, char *argv[]) {
             fprintf(stderr,"wc_curve25519_make_key failed: %s\n", wc_GetErrorString(ret));
             return 1;
         }
-        key_to_base64(base64, key.k.point);
+        key_to_base64(base64, key.k);
     } else {
         uint8_t key[WG_KEY_LEN];
         int ret = wc_RNG_GenerateBlock(&gRng, key, sizeof key);
