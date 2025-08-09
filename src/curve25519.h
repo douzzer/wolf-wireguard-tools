@@ -6,10 +6,6 @@
 #ifndef CURVE25519_H
 #define CURVE25519_H
 
-#ifdef USE_WOLFCRYPT
-#include "wolfcrypto_shim.h"
-#else
-
 #include <stdint.h>
 #include <sys/types.h>
 
@@ -25,5 +21,4 @@ static inline void curve25519_clamp_secret(uint8_t secret[static CURVE25519_KEY_
 	secret[31] = (secret[31] & 127) | 64;
 }
 
-#endif
 #endif

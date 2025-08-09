@@ -27,7 +27,7 @@ static int get_dgram_socket(void)
 	return sock;
 }
 
-static int kernel_get_wireguard_interfaces(struct string_list *list)
+static int kernel_get_wolfguard_interfaces(struct string_list *list)
 {
 	struct ifgroupreq ifgr = { .ifgr_name = "wg" };
 	struct ifg_req *ifg;

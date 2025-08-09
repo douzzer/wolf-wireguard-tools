@@ -67,27 +67,69 @@ static void sort_peers(struct wgdevice *device)
 	free(peers);
 }
 
-static char *key(const uint8_t key[static WG_KEY_LEN])
+static char *private_key(const uint8_t key[static WG_PRIVATE_KEY_LEN])
 {
-	static char base64[WG_KEY_LEN_BASE64];
+	static char base64[WG_BASE64_LEN(WG_PRIVATE_KEY_LEN)];
 
-	key_to_base64(base64, key);
+	if (! wg_to_base64(base64, sizeof(base64), key, WG_PRIVATE_KEY_LEN))
+		return "(error)";
 	return base64;
 }
 
-static char *maybe_key(const uint8_t maybe_key[static WG_KEY_LEN], bool have_it)
+static char *public_key(const uint8_t key[static WG_PUBLIC_KEY_LEN])
+{
+	static char base64[WG_BASE64_LEN(WG_PUBLIC_KEY_LEN)];
+
+	if (! wg_to_base64(base64, sizeof(base64), key, WG_PUBLIC_KEY_LEN))
+		return "(error)";
+	return base64;
+}
+
+static char *preshared_key(const uint8_t key[static WG_SYMMETRIC_KEY_LEN])
+{
+	static char base64[WG_BASE64_LEN(WG_SYMMETRIC_KEY_LEN)];
+
+	if (! wg_to_base64(base64, sizeof(base64), key, WG_SYMMETRIC_KEY_LEN))
+		return "(error)";
+	return base64;
+}
+
+static char *maybe_private_key(const uint8_t maybe_key[static WG_PRIVATE_KEY_LEN], bool have_it)
 {
 	if (!have_it)
 		return "(none)";
-	return key(maybe_key);
+	return private_key(maybe_key);
 }
 
-static char *masked_key(const uint8_t masked_key[static WG_KEY_LEN])
+static char *maybe_public_key(const uint8_t maybe_key[static WG_PUBLIC_KEY_LEN], bool have_it)
+{
+	if (!have_it)
+		return "(none)";
+	return public_key(maybe_key);
+}
+
+static char *maybe_preshared_key(const uint8_t maybe_key[static WG_SYMMETRIC_KEY_LEN], bool have_it)
+{
+	if (!have_it)
+		return "(none)";
+	return preshared_key(maybe_key);
+}
+
+static char *masked_private_key(const uint8_t masked_key[static WG_PRIVATE_KEY_LEN])
 {
 	const char *var = getenv("WG_HIDE_KEYS");
 
 	if (var && !strcmp(var, "never"))
-		return key(masked_key);
+		return private_key(masked_key);
+	return "(hidden)";
+}
+
+static char *masked_preshared_key(const uint8_t masked_key[static WG_SYMMETRIC_KEY_LEN])
+{
+	const char *var = getenv("WG_HIDE_KEYS");
+
+	if (var && !strcmp(var, "never"))
+		return preshared_key(masked_key);
 	return "(hidden)";
 }
 
@@ -213,9 +255,9 @@ static void pretty_print(struct wgdevice *device)
 	terminal_printf(TERMINAL_RESET);
 	terminal_printf(TERMINAL_FG_GREEN TERMINAL_BOLD "interface" TERMINAL_RESET ": " TERMINAL_FG_GREEN "%s" TERMINAL_RESET "\n", device->name);
 	if (device->flags & WGDEVICE_HAS_PUBLIC_KEY)
-		terminal_printf("  " TERMINAL_BOLD "public key" TERMINAL_RESET ": %s\n", key(device->public_key));
+		terminal_printf("  " TERMINAL_BOLD "public key" TERMINAL_RESET ": %s\n", public_key(device->public_key));
 	if (device->flags & WGDEVICE_HAS_PRIVATE_KEY)
-		terminal_printf("  " TERMINAL_BOLD "private key" TERMINAL_RESET ": %s\n", masked_key(device->private_key));
+		terminal_printf("  " TERMINAL_BOLD "private key" TERMINAL_RESET ": %s\n", masked_private_key(device->private_key));
 	if (device->listen_port)
 		terminal_printf("  " TERMINAL_BOLD "listening port" TERMINAL_RESET ": %u\n", device->listen_port);
 	if (device->fwmark)
@@ -225,9 +267,9 @@ static void pretty_print(struct wgdevice *device)
 		terminal_printf("\n");
 	}
 	for_each_wgpeer(device, peer) {
-		terminal_printf(TERMINAL_FG_YELLOW TERMINAL_BOLD "peer" TERMINAL_RESET ": " TERMINAL_FG_YELLOW "%s" TERMINAL_RESET "\n", key(peer->public_key));
+		terminal_printf(TERMINAL_FG_YELLOW TERMINAL_BOLD "peer" TERMINAL_RESET ": " TERMINAL_FG_YELLOW "%s" TERMINAL_RESET "\n", public_key(peer->public_key));
 		if (peer->flags & WGPEER_HAS_PRESHARED_KEY)
-			terminal_printf("  " TERMINAL_BOLD "preshared key" TERMINAL_RESET ": %s\n", masked_key(peer->preshared_key));
+			terminal_printf("  " TERMINAL_BOLD "preshared key" TERMINAL_RESET ": %s\n", masked_preshared_key(peer->preshared_key));
 		if (peer->endpoint.addr.sa_family == AF_INET || peer->endpoint.addr.sa_family == AF_INET6)
 			terminal_printf("  " TERMINAL_BOLD "endpoint" TERMINAL_RESET ": %s\n", endpoint(&peer->endpoint.addr));
 		terminal_printf("  " TERMINAL_BOLD "allowed ips" TERMINAL_RESET ": ");
@@ -257,8 +299,8 @@ static void dump_print(struct wgdevice *device, bool with_interface)
 
 	if (with_interface)
 		printf("%s\t", device->name);
-	printf("%s\t", maybe_key(device->private_key, device->flags & WGDEVICE_HAS_PRIVATE_KEY));
-	printf("%s\t", maybe_key(device->public_key, device->flags & WGDEVICE_HAS_PUBLIC_KEY));
+	printf("%s\t", maybe_private_key(device->private_key, device->flags & WGDEVICE_HAS_PRIVATE_KEY));
+	printf("%s\t", maybe_public_key(device->public_key, device->flags & WGDEVICE_HAS_PUBLIC_KEY));
 	printf("%u\t", device->listen_port);
 	if (device->fwmark)
 		printf("0x%x\n", device->fwmark);
@@ -267,8 +309,8 @@ static void dump_print(struct wgdevice *device, bool with_interface)
 	for_each_wgpeer(device, peer) {
 		if (with_interface)
 			printf("%s\t", device->name);
-		printf("%s\t", key(peer->public_key));
-		printf("%s\t", maybe_key(peer->preshared_key, peer->flags & WGPEER_HAS_PRESHARED_KEY));
+		printf("%s\t", public_key(peer->public_key));
+		printf("%s\t", maybe_preshared_key(peer->preshared_key, peer->flags & WGPEER_HAS_PRESHARED_KEY));
 		if (peer->endpoint.addr.sa_family == AF_INET || peer->endpoint.addr.sa_family == AF_INET6)
 			printf("%s\t", endpoint(&peer->endpoint.addr));
 		else
@@ -295,11 +337,11 @@ static bool ugly_print(struct wgdevice *device, const char *param, bool with_int
 	if (!strcmp(param, "public-key")) {
 		if (with_interface)
 			printf("%s\t", device->name);
-		printf("%s\n", maybe_key(device->public_key, device->flags & WGDEVICE_HAS_PUBLIC_KEY));
+		printf("%s\n", maybe_public_key(device->public_key, device->flags & WGDEVICE_HAS_PUBLIC_KEY));
 	} else if (!strcmp(param, "private-key")) {
 		if (with_interface)
 			printf("%s\t", device->name);
-		printf("%s\n", maybe_key(device->private_key, device->flags & WGDEVICE_HAS_PRIVATE_KEY));
+		printf("%s\n", maybe_private_key(device->private_key, device->flags & WGDEVICE_HAS_PRIVATE_KEY));
 	} else if (!strcmp(param, "listen-port")) {
 		if (with_interface)
 			printf("%s\t", device->name);
@@ -315,7 +357,7 @@ static bool ugly_print(struct wgdevice *device, const char *param, bool with_int
 		if (with_interface)
 			printf("%s\t", device->name);
 		for_each_wgpeer(device, peer) {
-			printf("%s\t", key(peer->public_key));
+			printf("%s\t", public_key(peer->public_key));
 			if (peer->endpoint.addr.sa_family == AF_INET || peer->endpoint.addr.sa_family == AF_INET6)
 				printf("%s\n", endpoint(&peer->endpoint.addr));
 			else
@@ -325,7 +367,7 @@ static bool ugly_print(struct wgdevice *device, const char *param, bool with_int
 		for_each_wgpeer(device, peer) {
 			if (with_interface)
 				printf("%s\t", device->name);
-			printf("%s\t", key(peer->public_key));
+			printf("%s\t", public_key(peer->public_key));
 			if (peer->first_allowedip) {
 				for_each_wgallowedip(peer, allowedip)
 					printf("%s/%u%c", ip(allowedip), allowedip->cidr, allowedip->next_allowedip ? ' ' : '\n');
@@ -336,35 +378,35 @@ static bool ugly_print(struct wgdevice *device, const char *param, bool with_int
 		for_each_wgpeer(device, peer) {
 			if (with_interface)
 				printf("%s\t", device->name);
-			printf("%s\t%llu\n", key(peer->public_key), (unsigned long long)peer->last_handshake_time.tv_sec);
+			printf("%s\t%llu\n", public_key(peer->public_key), (unsigned long long)peer->last_handshake_time.tv_sec);
 		}
 	} else if (!strcmp(param, "transfer")) {
 		for_each_wgpeer(device, peer) {
 			if (with_interface)
 				printf("%s\t", device->name);
-			printf("%s\t%" PRIu64 "\t%" PRIu64 "\n", key(peer->public_key), (uint64_t)peer->rx_bytes, (uint64_t)peer->tx_bytes);
+			printf("%s\t%" PRIu64 "\t%" PRIu64 "\n", public_key(peer->public_key), (uint64_t)peer->rx_bytes, (uint64_t)peer->tx_bytes);
 		}
 	} else if (!strcmp(param, "persistent-keepalive")) {
 		for_each_wgpeer(device, peer) {
 			if (with_interface)
 				printf("%s\t", device->name);
 			if (peer->persistent_keepalive_interval)
-				printf("%s\t%u\n", key(peer->public_key), peer->persistent_keepalive_interval);
+				printf("%s\t%u\n", public_key(peer->public_key), peer->persistent_keepalive_interval);
 			else
-				printf("%s\toff\n", key(peer->public_key));
+				printf("%s\toff\n", public_key(peer->public_key));
 		}
 	} else if (!strcmp(param, "preshared-keys")) {
 		for_each_wgpeer(device, peer) {
 			if (with_interface)
 				printf("%s\t", device->name);
-			printf("%s\t", key(peer->public_key));
-			printf("%s\n", maybe_key(peer->preshared_key, peer->flags & WGPEER_HAS_PRESHARED_KEY));
+			printf("%s\t", public_key(peer->public_key));
+			printf("%s\n", maybe_preshared_key(peer->preshared_key, peer->flags & WGPEER_HAS_PRESHARED_KEY));
 		}
 	} else if (!strcmp(param, "peers")) {
 		for_each_wgpeer(device, peer) {
 			if (with_interface)
 				printf("%s\t", device->name);
-			printf("%s\n", key(peer->public_key));
+			printf("%s\n", public_key(peer->public_key));
 		}
 	} else if (!strcmp(param, "dump"))
 		dump_print(device, with_interface);

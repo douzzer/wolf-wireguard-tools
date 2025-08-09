@@ -17,7 +17,7 @@
 #include <linux/if_link.h>
 #include <linux/netlink.h>
 #include <linux/rtnetlink.h>
-#include <linux/wireguard.h>
+#include <linux/wolfguard.h>
 #include <netinet/in.h>
 #include "containers.h"
 #include "encoding.h"
@@ -29,7 +29,7 @@
 
 struct interface {
 	const char *name;
-	bool is_wireguard;
+	bool is_wolfguard;
 };
 
 static int parse_linkinfo(const struct nlattr *attr, void *data)
@@ -37,7 +37,7 @@ static int parse_linkinfo(const struct nlattr *attr, void *data)
 	struct interface *interface = data;
 
 	if (mnl_attr_get_type(attr) == IFLA_INFO_KIND && !strcmp(WG_GENL_NAME, mnl_attr_get_str(attr)))
-		interface->is_wireguard = true;
+		interface->is_wolfguard = true;
 	return MNL_CB_OK;
 }
 
@@ -61,7 +61,7 @@ static int read_devices_cb(const struct nlmsghdr *nlh, void *data)
 	ret = mnl_attr_parse(nlh, sizeof(struct ifinfomsg), parse_infomsg, &interface);
 	if (ret != MNL_CB_OK)
 		return ret;
-	if (interface.name && interface.is_wireguard)
+	if (interface.name && interface.is_wolfguard)
 		ret = string_list_add(list, interface.name);
 	if (ret < 0)
 		return ret;
@@ -70,7 +70,7 @@ static int read_devices_cb(const struct nlmsghdr *nlh, void *data)
 	return MNL_CB_OK;
 }
 
-static int kernel_get_wireguard_interfaces(struct string_list *list)
+static int kernel_get_wolfguard_interfaces(struct string_list *list)
 {
 	struct mnl_socket *nl = NULL;
 	char *rtnl_buffer = NULL;
@@ -339,7 +339,7 @@ static int parse_peer(const struct nlattr *attr, void *data)
 	case WGPEER_A_PRESHARED_KEY:
 		if (mnl_attr_get_payload_len(attr) == sizeof(peer->preshared_key)) {
 			memcpy(peer->preshared_key, mnl_attr_get_payload(attr), sizeof(peer->preshared_key));
-			if (!key_is_zero(peer->preshared_key))
+			if (!wg_is_zero(peer->preshared_key, sizeof(peer->preshared_key)))
 				peer->flags |= WGPEER_HAS_PRESHARED_KEY;
 		}
 		break;

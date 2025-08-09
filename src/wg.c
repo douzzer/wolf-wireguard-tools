@@ -10,6 +10,9 @@
 #include "subcommands.h"
 #include "version.h"
 
+#include <wolfssl/options.h>
+#include <wolfssl/wolfcrypt/random.h>
+
 const char *PROG_NAME;
 
 static const struct {
@@ -18,11 +21,11 @@ static const struct {
 	const char *description;
 } subcommands[] = {
 	{ "show", show_main, "Shows the current configuration and device information" },
-	{ "showconf", showconf_main, "Shows the current configuration of a given WireGuard interface, for use with `setconf'" },
+	{ "showconf", showconf_main, "Shows the current configuration of a given WolfGuard interface, for use with `setconf'" },
 	{ "set", set_main, "Change the current configuration, add peers, remove peers, or change peers" },
-	{ "setconf", setconf_main, "Applies a configuration file to a WireGuard interface" },
-	{ "addconf", setconf_main, "Appends a configuration file to a WireGuard interface" },
-	{ "syncconf", setconf_main, "Synchronizes a configuration file to a WireGuard interface" },
+	{ "setconf", setconf_main, "Applies a configuration file to a WolfGuard interface" },
+	{ "addconf", setconf_main, "Appends a configuration file to a WolfGuard interface" },
+	{ "syncconf", setconf_main, "Synchronizes a configuration file to a WolfGuard interface" },
 	{ "genkey", genkey_main, "Generates a new private key and writes it to stdout" },
 	{ "genpsk", genkey_main, "Generates a new preshared key and writes it to stdout" },
 	{ "pubkey", pubkey_main, "Reads a private key from stdin and writes a public key to stdout" }
@@ -42,13 +45,17 @@ int main(int argc, char *argv[])
 	PROG_NAME = argv[0];
 
 	if (argc == 2 && (!strcmp(argv[1], "-v") || !strcmp(argv[1], "--version") || !strcmp(argv[1], "version"))) {
-		printf("wireguard-tools v%s - https://git.zx2c4.com/wireguard-tools/\n", WIREGUARD_TOOLS_VERSION);
+		printf("wolfguard-tools v%s - info@wolfssl.com\n", WOLFGUARD_TOOLS_VERSION);
 		return 0;
 	}
 	if (argc == 2 && (!strcmp(argv[1], "-h") || !strcmp(argv[1], "--help") || !strcmp(argv[1], "help"))) {
 		show_usage(stdout);
 		return 0;
 	}
+
+#ifdef WC_RNG_SEED_CB
+        wc_SetSeed_Cb(wc_GenerateSeed);
+#endif
 
 	if (argc == 1) {
 		static char *new_argv[] = { "show", NULL };

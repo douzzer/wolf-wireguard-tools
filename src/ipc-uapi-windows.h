@@ -70,7 +70,7 @@ static FILE *userspace_interface_file(const char *iface)
 		}
 		CloseHandle(duplicated_token);
 
-		snprintf(fname, sizeof(fname), "\\\\.\\pipe\\ProtectedPrefix\\Administrators\\WireGuard\\%s", iface);
+		snprintf(fname, sizeof(fname), "\\\\.\\pipe\\ProtectedPrefix\\Administrators\\WolfGuard\\%s", iface);
 		pipe_handle = CreateFile(fname, GENERIC_READ | GENERIC_WRITE, 0, NULL, OPEN_EXISTING, 0, NULL);
 		last_error = GetLastError();
 		if (pipe_handle == INVALID_HANDLE_VALUE)
@@ -113,9 +113,9 @@ err:
 	return NULL;
 }
 
-static int userspace_get_wireguard_interfaces(struct string_list *list)
+static int userspace_get_wolfguard_interfaces(struct string_list *list)
 {
-	static const char prefix[] = "ProtectedPrefix\\Administrators\\WireGuard\\";
+	static const char prefix[] = "ProtectedPrefix\\Administrators\\WolfGuard\\";
 	WIN32_FIND_DATA find_data;
 	HANDLE find_handle;
 	int ret = 0;

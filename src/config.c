@@ -22,7 +22,7 @@
 
 #define COMMENT_CHAR '#'
 
-static const char *get_value(const char *line, const char *key)
+static const char *get_value(const char *line, const char *key, size_t *value_len)
 {
 	size_t linelen = strlen(line);
 	size_t keylen = strlen(key);
@@ -33,6 +33,7 @@ static const char *get_value(const char *line, const char *key)
 	if (strncasecmp(line, key, keylen))
 		return NULL;
 
+	*value_len = linelen - keylen;
 	return line + keylen;
 }
 
@@ -104,21 +105,41 @@ err:
 	return false;
 }
 
-static inline bool parse_key(uint8_t key[static WG_KEY_LEN], const char *value)
+static inline bool parse_private_key(uint8_t key[static WG_PRIVATE_KEY_LEN], const char *value, size_t value_len)
 {
-	if (!key_from_base64(key, value)) {
-		fprintf(stderr, "Key is not the correct length or format: `%s'\n", value);
-		memset(key, 0, WG_KEY_LEN);
+	if (!wg_from_base64(key, WG_PRIVATE_KEY_LEN, value, value_len)) {
+		fprintf(stderr, "Private key is not the correct length or format: `%s'\n", value);
+		memset(key, 0, WG_PRIVATE_KEY_LEN);
 		return false;
 	}
 	return true;
 }
 
-static bool parse_keyfile(uint8_t key[static WG_KEY_LEN], const char *path)
+static inline bool parse_public_key(uint8_t key[static WG_PUBLIC_KEY_LEN], const char *value, size_t value_len)
+{
+	if (!wg_from_base64(key, WG_PUBLIC_KEY_LEN, value, value_len)) {
+		fprintf(stderr, "Public key is not the correct length or format: `%s'\n", value);
+		memset(key, 0, WG_PUBLIC_KEY_LEN);
+		return false;
+	}
+	return true;
+}
+
+static inline bool parse_preshared_key(uint8_t key[static WG_SYMMETRIC_KEY_LEN], const char *value, size_t value_len)
+{
+	if (!wg_from_base64(key, WG_SYMMETRIC_KEY_LEN, value, value_len)) {
+		fprintf(stderr, "Preshared key is not the correct length or format: `%s'\n", value);
+		memset(key, 0, WG_SYMMETRIC_KEY_LEN);
+		return false;
+	}
+	return true;
+}
+
+static bool parse_keyfile(uint8_t *key, size_t key_len, const char *path)
 {
 	FILE *f;
 	int c;
-	char dst[WG_KEY_LEN_BASE64];
+	char *dst;
 	bool ret = false;
 
 	f = fopen(path, "r");
@@ -127,10 +148,16 @@ static bool parse_keyfile(uint8_t key[static WG_KEY_LEN], const char *path)
 		return false;
 	}
 
-	if (fread(dst, WG_KEY_LEN_BASE64 - 1, 1, f) != 1) {
+	dst = (char *)malloc(WG_BASE64_LEN(key_len) - 1);
+	if (!dst) {
+		fprintf(stderr, "Error allocating buffer: %m.\n");
+		goto out;
+	}
+
+	if (fread(dst, WG_BASE64_LEN(key_len) - 1, 1, f) != 1) {
 		/* If we're at the end and we didn't read anything, we're /dev/null or an empty file. */
 		if (!ferror(f) && feof(f) && !ftell(f)) {
-			memset(key, 0, WG_KEY_LEN);
+			memset(key, 0, key_len);
 			ret = true;
 			goto out;
 		}
@@ -138,7 +165,6 @@ static bool parse_keyfile(uint8_t key[static WG_KEY_LEN], const char *path)
 		fprintf(stderr, "Invalid length key in key file\n");
 		goto out;
 	}
-	dst[WG_KEY_LEN_BASE64 - 1] = '\0';
 
 	while ((c = getc(f)) != EOF) {
 		if (!char_is_space(c)) {
@@ -150,9 +176,10 @@ static bool parse_keyfile(uint8_t key[static WG_KEY_LEN], const char *path)
 		perror("getc");
 		goto out;
 	}
-	ret = parse_key(key, dst);
+	ret = wg_from_base64(key, key_len, dst, WG_BASE64_LEN(key_len) - 1);
 
 out:
+	free(dst);
 	fclose(f);
 	return ret;
 }
@@ -413,6 +440,7 @@ err:
 static bool process_line(struct config_ctx *ctx, const char *line)
 {
 	const char *value;
+	size_t value_len;
 	bool ret = true;
 
 	if (!strcasecmp(line, "[Interface]")) {
@@ -439,7 +467,7 @@ static bool process_line(struct config_ctx *ctx, const char *line)
 		return true;
 	}
 
-#define key_match(key) (value = get_value(line, key "="))
+#define key_match(key) (value = get_value(line, key "=", &value_len))
 
 	if (ctx->is_device_section) {
 		if (key_match("ListenPort"))
@@ -447,7 +475,7 @@ static bool process_line(struct config_ctx *ctx, const char *line)
 		else if (key_match("FwMark"))
 			ret = parse_fwmark(&ctx->device->fwmark, &ctx->device->flags, value);
 		else if (key_match("PrivateKey")) {
-			ret = parse_key(ctx->device->private_key, value);
+			ret = parse_private_key(ctx->device->private_key, value, value_len);
 			if (ret)
 				ctx->device->flags |= WGDEVICE_HAS_PRIVATE_KEY;
 		} else
@@ -456,7 +484,7 @@ static bool process_line(struct config_ctx *ctx, const char *line)
 		if (key_match("Endpoint"))
 			ret = parse_endpoint(&ctx->last_peer->endpoint.addr, value);
 		else if (key_match("PublicKey")) {
-			ret = parse_key(ctx->last_peer->public_key, value);
+			ret = parse_public_key(ctx->last_peer->public_key, value, value_len);
 			if (ret)
 				ctx->last_peer->flags |= WGPEER_HAS_PUBLIC_KEY;
 		} else if (key_match("AllowedIPs"))
@@ -464,7 +492,7 @@ static bool process_line(struct config_ctx *ctx, const char *line)
 		else if (key_match("PersistentKeepalive"))
 			ret = parse_persistent_keepalive(&ctx->last_peer->persistent_keepalive_interval, &ctx->last_peer->flags, value);
 		else if (key_match("PresharedKey")) {
-			ret = parse_key(ctx->last_peer->preshared_key, value);
+			ret = parse_preshared_key(ctx->last_peer->preshared_key, value, value_len);
 			if (ret)
 				ctx->last_peer->flags |= WGPEER_HAS_PRESHARED_KEY;
 		} else
@@ -583,7 +611,7 @@ struct wgdevice *config_read_cmd(char *argv[], int argc)
 			argv += 2;
 			argc -= 2;
 		} else if (!strcmp(argv[0], "private-key") && argc >= 2 && !peer) {
-			if (!parse_keyfile(device->private_key, argv[1]))
+			if (!parse_keyfile(device->private_key, WG_PRIVATE_KEY_LEN, argv[1]))
 				goto error;
 			device->flags |= WGDEVICE_HAS_PRIVATE_KEY;
 			argv += 2;
@@ -601,7 +629,7 @@ struct wgdevice *config_read_cmd(char *argv[], int argc)
 			else
 				device->first_peer = new_peer;
 			peer = new_peer;
-			if (!parse_key(peer->public_key, argv[1]))
+			if (!parse_public_key(peer->public_key, argv[1], strlen(argv[1])))
 				goto error;
 			peer->flags |= WGPEER_HAS_PUBLIC_KEY;
 			argv += 2;
@@ -633,7 +661,7 @@ struct wgdevice *config_read_cmd(char *argv[], int argc)
 			argv += 2;
 			argc -= 2;
 		} else if (!strcmp(argv[0], "preshared-key") && argc >= 2 && peer) {
-			if (!parse_keyfile(peer->preshared_key, argv[1]))
+			if (!parse_keyfile(peer->preshared_key, WG_SYMMETRIC_KEY_LEN, argv[1]))
 				goto error;
 			peer->flags |= WGPEER_HAS_PRESHARED_KEY;
 			argv += 2;

@@ -53,11 +53,11 @@ char *ipc_list_devices(void)
 	int ret;
 
 #ifdef IPC_SUPPORTS_KERNEL_INTERFACE
-	ret = kernel_get_wireguard_interfaces(&list);
+	ret = kernel_get_wolfguard_interfaces(&list);
 	if (ret < 0)
 		goto cleanup;
 #endif
-	ret = userspace_get_wireguard_interfaces(&list);
+	ret = userspace_get_wolfguard_interfaces(&list);
 	if (ret < 0)
 		goto cleanup;
 
@@ -73,7 +73,7 @@ cleanup:
 int ipc_get_device(struct wgdevice **dev, const char *iface)
 {
 #ifdef IPC_SUPPORTS_KERNEL_INTERFACE
-	if (userspace_has_wireguard_interface(iface))
+	if (userspace_has_wolfguard_interface(iface))
 		return userspace_get_device(dev, iface);
 	return kernel_get_device(dev, iface);
 #else
@@ -84,7 +84,7 @@ int ipc_get_device(struct wgdevice **dev, const char *iface)
 int ipc_set_device(struct wgdevice *dev)
 {
 #ifdef IPC_SUPPORTS_KERNEL_INTERFACE
-	if (userspace_has_wireguard_interface(dev->name))
+	if (userspace_has_wolfguard_interface(dev->name))
 		return userspace_set_device(dev);
 	return kernel_set_device(dev);
 #else

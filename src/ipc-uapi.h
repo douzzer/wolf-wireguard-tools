@@ -26,7 +26,7 @@
 
 static int userspace_set_device(struct wgdevice *dev)
 {
-	char hex[WG_KEY_LEN_HEX], ip[INET6_ADDRSTRLEN], host[4096 + 1], service[512 + 1];
+	char hex[WG_HEX_LEN(WG_KEY_LEN_MAX)], ip[INET6_ADDRSTRLEN], host[4096 + 1], service[512 + 1];
 	struct wgpeer *peer;
 	struct wgallowedip *allowedip;
 	FILE *f;
@@ -36,29 +36,62 @@ static int userspace_set_device(struct wgdevice *dev)
 	f = userspace_interface_file(dev->name);
 	if (!f)
 		return -errno;
-	fprintf(f, "set=1\n");
+	if (fprintf(f, "set=1\n") < 0) {
+		ret = errno ? -errno : -EIO;
+		goto out;
+	}
 
 	if (dev->flags & WGDEVICE_HAS_PRIVATE_KEY) {
-		key_to_hex(hex, dev->private_key);
-		fprintf(f, "private_key=%s\n", hex);
+		if (!wg_to_hex(hex, WG_HEX_LEN(WG_PRIVATE_KEY_LEN), dev->private_key, sizeof(dev->private_key))) {
+			ret = -EINVAL;
+			goto out;
+		}
+		if (fprintf(f, "private_key=%s\n", hex) < 0) {
+			ret = errno ? -errno : -EIO;
+			goto out;
+		}
 	}
-	if (dev->flags & WGDEVICE_HAS_LISTEN_PORT)
-		fprintf(f, "listen_port=%u\n", dev->listen_port);
-	if (dev->flags & WGDEVICE_HAS_FWMARK)
-		fprintf(f, "fwmark=%u\n", dev->fwmark);
-	if (dev->flags & WGDEVICE_REPLACE_PEERS)
-		fprintf(f, "replace_peers=true\n");
+	if (dev->flags & WGDEVICE_HAS_LISTEN_PORT) {
+		if (fprintf(f, "listen_port=%u\n", dev->listen_port) < 0) {
+			ret = errno ? -errno : -EIO;
+			goto out;
+		}
+	}
+	if (dev->flags & WGDEVICE_HAS_FWMARK) {
+		if (fprintf(f, "fwmark=%u\n", dev->fwmark) < 0) {
+			ret = errno ? -errno : -EIO;
+			goto out;
+		}
+	}
+	if (dev->flags & WGDEVICE_REPLACE_PEERS) {
+		if (fprintf(f, "replace_peers=true\n") < 0) {
+			ret = errno ? -errno : -EIO;
+			goto out;
+		}
+	}
 
 	for_each_wgpeer(dev, peer) {
-		key_to_hex(hex, peer->public_key);
-		fprintf(f, "public_key=%s\n", hex);
+		if (!wg_to_hex(hex, WG_HEX_LEN(WG_PUBLIC_KEY_LEN), peer->public_key, sizeof(peer->public_key))) {
+			ret = -EINVAL;
+			goto out;
+		}
+		if (fprintf(f, "public_key=%s\n", hex) < 0) {
+			ret = errno ? -errno : -EIO;
+			goto out;
+		}
 		if (peer->flags & WGPEER_REMOVE_ME) {
-			fprintf(f, "remove=true\n");
+			if (fprintf(f, "remove=true\n") < 0) {
+				ret = errno ? -errno : -EIO;
+				goto out;
+			}
 			continue;
 		}
 		if (peer->flags & WGPEER_HAS_PRESHARED_KEY) {
-			key_to_hex(hex, peer->preshared_key);
-			fprintf(f, "preshared_key=%s\n", hex);
+			wg_to_hex(hex, WG_HEX_LEN(WG_SYMMETRIC_KEY_LEN), peer->preshared_key, sizeof(peer->preshared_key));
+			if (fprintf(f, "preshared_key=%s\n", hex) < 0) {
+				ret = errno ? -errno : -EIO;
+				goto out;
+			}
 		}
 		if (peer->endpoint.addr.sa_family == AF_INET || peer->endpoint.addr.sa_family == AF_INET6) {
 			addr_len = 0;
@@ -67,16 +100,32 @@ static int userspace_set_device(struct wgdevice *dev)
 			else if (peer->endpoint.addr.sa_family == AF_INET6)
 				addr_len = sizeof(struct sockaddr_in6);
 			if (!getnameinfo(&peer->endpoint.addr, addr_len, host, sizeof(host), service, sizeof(service), NI_DGRAM | NI_NUMERICSERV | NI_NUMERICHOST)) {
-				if (peer->endpoint.addr.sa_family == AF_INET6 && strchr(host, ':'))
-					fprintf(f, "endpoint=[%s]:%s\n", host, service);
-				else
-					fprintf(f, "endpoint=%s:%s\n", host, service);
+				if (peer->endpoint.addr.sa_family == AF_INET6 && strchr(host, ':')) {
+					if (fprintf(f, "endpoint=[%s]:%s\n", host, service) < 0) {
+						ret = errno ? -errno : -EIO;
+						goto out;
+					}
+				}
+				else {
+					if (fprintf(f, "endpoint=%s:%s\n", host, service) < 0) {
+						ret = errno ? -errno : -EIO;
+						goto out;
+					}
+				}
 			}
 		}
-		if (peer->flags & WGPEER_HAS_PERSISTENT_KEEPALIVE_INTERVAL)
-			fprintf(f, "persistent_keepalive_interval=%u\n", peer->persistent_keepalive_interval);
-		if (peer->flags & WGPEER_REPLACE_ALLOWEDIPS)
-			fprintf(f, "replace_allowed_ips=true\n");
+		if (peer->flags & WGPEER_HAS_PERSISTENT_KEEPALIVE_INTERVAL) {
+			if (fprintf(f, "persistent_keepalive_interval=%u\n", peer->persistent_keepalive_interval) < 0) {
+				ret = errno ? -errno : -EIO;
+				goto out;
+			}
+		}
+		if (peer->flags & WGPEER_REPLACE_ALLOWEDIPS) {
+			if (fprintf(f, "replace_allowed_ips=true\n") < 0) {
+				ret = errno ? -errno : -EIO;
+				goto out;
+			}
+		}
 		for_each_wgallowedip(peer, allowedip) {
 			if (allowedip->family == AF_INET) {
 				if (!inet_ntop(AF_INET, &allowedip->ip4, ip, INET6_ADDRSTRLEN))
@@ -86,14 +135,26 @@ static int userspace_set_device(struct wgdevice *dev)
 					continue;
 			} else
 				continue;
-			fprintf(f, "allowed_ip=%s/%d\n", ip, allowedip->cidr);
+			if (fprintf(f, "allowed_ip=%s/%d\n", ip, allowedip->cidr) < 0) {
+				ret = errno ? -errno : -EIO;
+				goto out;
+			}
 		}
 	}
-	fprintf(f, "\n");
-	fflush(f);
+	if (fprintf(f, "\n") < 0) {
+		ret = errno ? -errno : -EIO;
+		goto out;
+	}
+	if (fflush(f) == EOF) {
+		ret = -errno;
+		goto out;
+	}
 
 	if (fscanf(f, "errno=%d\n\n", &ret) != 1)
 		ret = errno ? -errno : -EPROTO;
+
+out:
+
 	fclose(f);
 	errno = -ret;
 	return ret;
@@ -115,7 +176,7 @@ static int userspace_get_device(struct wgdevice **out, const char *iface)
 	struct wgdevice *dev;
 	struct wgpeer *peer = NULL;
 	struct wgallowedip *allowedip = NULL;
-	size_t line_buffer_len = 0, line_len;
+	size_t line_buffer_len = 0, line_len, value_len;
 	char *key = NULL, *value;
 	FILE *f;
 	int ret = -EPROTO;
@@ -146,9 +207,10 @@ static int userspace_get_device(struct wgdevice **out, const char *iface)
 		if (!value || line_len == 0 || key[line_len - 1] != '\n')
 			break;
 		*value++ = key[--line_len] = '\0';
+		value_len = line_len - (value - key);
 
 		if (!peer && !strcmp(key, "private_key")) {
-			if (!key_from_hex(dev->private_key, value))
+			if (!wg_from_hex(dev->private_key, sizeof(dev->private_key), value, value_len))
 				break;
 			curve25519_generate_public(dev->public_key, dev->private_key);
 			dev->flags |= WGDEVICE_HAS_PRIVATE_KEY | WGDEVICE_HAS_PUBLIC_KEY;
@@ -171,13 +233,13 @@ static int userspace_get_device(struct wgdevice **out, const char *iface)
 			else
 				dev->first_peer = new_peer;
 			peer = new_peer;
-			if (!key_from_hex(peer->public_key, value))
+			if (!wg_from_hex(dev->public_key, sizeof(dev->public_key), value, value_len))
 				break;
 			peer->flags |= WGPEER_HAS_PUBLIC_KEY;
 		} else if (peer && !strcmp(key, "preshared_key")) {
-			if (!key_from_hex(peer->preshared_key, value))
+			if (!wg_from_hex(peer->preshared_key, sizeof(peer->preshared_key), value, value_len))
 				break;
-			if (!key_is_zero(peer->preshared_key))
+			if (!wg_is_zero(peer->preshared_key, sizeof(peer->preshared_key)))
 				peer->flags |= WGPEER_HAS_PRESHARED_KEY;
 		} else if (peer && !strcmp(key, "endpoint")) {
 			char *begin, *end;

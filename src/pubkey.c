@@ -6,28 +6,41 @@
 #include <errno.h>
 #include <stdio.h>
 
-#include "curve25519.h"
 #include "encoding.h"
 #include "subcommands.h"
 #include "ctype.h"
 
+#include <wolfssl/wolfcrypt/ecc.h>
+#include <wolfssl/wolfcrypt/random.h>
+#include <wolfssl/wolfcrypt/error-crypt.h>
+
 int pubkey_main(int argc, char *argv[])
 {
-	uint8_t key[WG_KEY_LEN] __attribute__((aligned(sizeof(uintptr_t))));
-	char base64[WG_KEY_LEN_BASE64];
+	uint8_t key[WG_KEY_LEN_MAX];
+	char base64[WG_BASE64_LEN(WG_KEY_LEN_MAX)];
 	int trailing_char;
+        ecc_key key_ecc;
+	int key_ecc_inited;
+	int ret = 1;
 
 	if (argc != 1) {
 		fprintf(stderr, "Usage: %s %s\n", PROG_NAME, argv[0]);
-		return 1;
+		goto out;
 	}
 
-	if (fread(base64, 1, sizeof(base64) - 1, stdin) != sizeof(base64) - 1) {
+        ret = wc_ecc_init(&key_ecc);
+        if (ret) {
+		fprintf(stderr, "wc_ecc_init() returned error: %s.\n", wc_GetErrorString(ret));
+		goto out;
+	}
+        key_ecc_inited = 1;
+
+	if (fread(base64, 1, WG_BASE64_LEN(WG_PRIVATE_KEY_LEN) - 1, stdin) != WG_BASE64_LEN(WG_PRIVATE_KEY_LEN) - 1) {
 		errno = EINVAL;
 		fprintf(stderr, "%s: Key is not the correct length or format\n", PROG_NAME);
-		return 1;
+		goto out;
 	}
-	base64[WG_KEY_LEN_BASE64 - 1] = '\0';
+	base64[sizeof(base64) - 1] = '\0';
 
 	for (;;) {
 		trailing_char = getc(stdin);
@@ -36,15 +49,50 @@ int pubkey_main(int argc, char *argv[])
 		if (trailing_char == EOF)
 			break;
 		fprintf(stderr, "%s: Trailing characters found after key\n", PROG_NAME);
-		return 1;
+		goto out;
 	}
 
-	if (!key_from_base64(key, base64)) {
-		fprintf(stderr, "%s: Key is not the correct length or format\n", PROG_NAME);
-		return 1;
+	if (!wg_from_base64(key, WG_PRIVATE_KEY_LEN, base64, WG_BASE64_LEN(WG_PRIVATE_KEY_LEN) - 1)) {
+		fprintf(stderr, "%s: wg_from_base64(): Key is not the correct length or format\n", PROG_NAME);
+		goto out;
 	}
-	curve25519_generate_public(key, key);
-	key_to_base64(base64, key);
+
+        ret = wc_ecc_import_private_key_ex(key, WG_PRIVATE_KEY_LEN,
+                                           NULL, 0, &key_ecc, WG_CURVE_ID);
+        if (ret) {
+		fprintf(stderr, "wc_ecc_import_private_key_ex() returned error: %s.\n", wc_GetErrorString(ret));
+		goto out;
+	}
+
+        {
+		word32 outLen = (word32)sizeof(key);
+		PRIVATE_KEY_UNLOCK();
+		ret = wc_ecc_export_x963(&key_ecc, key, &outLen);
+		PRIVATE_KEY_LOCK();
+		if (ret) {
+			fprintf(stderr, "wc_ecc_export_x963() returned error: %s.\n", wc_GetErrorString(ret));
+			goto out;
+		}
+		if (outLen != WG_PUBLIC_KEY_LEN) {
+			fprintf(stderr, "wc_ecc_export_x963() returned unexpected key length %u.\n", outLen);
+			goto out;
+		}
+	}
+
+	if (!wg_to_base64(base64, WG_BASE64_LEN(WG_PUBLIC_KEY_LEN), key, WG_PUBLIC_KEY_LEN)) {
+		fprintf(stderr, "%s: wg_to_base64() failed for public key.\n", PROG_NAME);
+		goto out;
+	}
 	puts(base64);
-	return 0;
+
+	ret = 0;
+
+out:
+
+	if (key_ecc_inited)
+                wc_ecc_free(&key_ecc);
+	memset(key, 0, sizeof(key));
+	memset(base64, 0, sizeof(base64));
+
+	return ret;
 }

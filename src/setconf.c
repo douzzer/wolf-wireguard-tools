@@ -21,7 +21,7 @@ struct pubkey_origin {
 static int pubkey_cmp(const void *first, const void *second)
 {
 	const struct pubkey_origin *a = first, *b = second;
-	int ret = memcmp(a->pubkey, b->pubkey, WG_KEY_LEN);
+	int ret = memcmp(a->pubkey, b->pubkey, WG_PUBLIC_KEY_LEN);
 	if (ret)
 		return ret;
 	return a->from_file - b->from_file;
@@ -77,7 +77,7 @@ static bool sync_conf(struct wgdevice *file)
 	for (i = 0; i < peer_count; ++i) {
 		if (pubkeys[i].from_file)
 			continue;
-		if (i == peer_count - 1 || !pubkeys[i + 1].from_file || memcmp(pubkeys[i].pubkey, pubkeys[i + 1].pubkey, WG_KEY_LEN)) {
+		if (i == peer_count - 1 || !pubkeys[i + 1].from_file || memcmp(pubkeys[i].pubkey, pubkeys[i + 1].pubkey, WG_PUBLIC_KEY_LEN)) {
 			peer = calloc(1, sizeof(struct wgpeer));
 			if (!peer) {
 				free_wgdevice(runtime);
@@ -86,7 +86,7 @@ static bool sync_conf(struct wgdevice *file)
 				return false;
 			}
 			peer->flags = WGPEER_REMOVE_ME;
-			memcpy(peer->public_key, pubkeys[i].pubkey, WG_KEY_LEN);
+			memcpy(peer->public_key, pubkeys[i].pubkey, WG_PUBLIC_KEY_LEN);
 			peer->next_peer = file->first_peer;
 			file->first_peer = peer;
 			if (!file->last_peer)

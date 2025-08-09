@@ -24,9 +24,12 @@
 #endif
 #endif
 
-#include "curve25519.h"
 #include "encoding.h"
 #include "subcommands.h"
+
+#include <wolfssl/wolfcrypt/ecc.h>
+#include <wolfssl/wolfcrypt/random.h>
+#include <wolfssl/wolfcrypt/error-crypt.h>
 
 #ifndef _WIN32
 static inline bool __attribute__((__warn_unused_result__)) get_random_bytes(uint8_t *out, size_t len)
@@ -72,28 +75,77 @@ static inline bool __attribute__((__warn_unused_result__)) get_random_bytes(uint
 }
 #endif
 
+
 int genkey_main(int argc, char *argv[])
 {
-	uint8_t key[WG_KEY_LEN];
-	char base64[WG_KEY_LEN_BASE64];
-	struct stat stat;
+	WC_RNG rng;
+	int rng_inited = 0;
+        ecc_key key;
+        int key_inited = 0;
+	byte exported_private[WG_PRIVATE_KEY_LEN];
+	char exported_private_base64[WG_BASE64_LEN(WG_PRIVATE_KEY_LEN)];
+        int ret;
 
 	if (argc != 1) {
 		fprintf(stderr, "Usage: %s %s\n", PROG_NAME, argv[0]);
 		return 1;
 	}
 
-	if (!fstat(STDOUT_FILENO, &stat) && S_ISREG(stat.st_mode) && stat.st_mode & S_IRWXO)
-		fputs("Warning: writing to world accessible file.\nConsider setting the umask to 077 and trying again.\n", stderr);
+        ret = wc_ecc_init(&key);
+        if (ret) {
+		fprintf(stderr, "wc_ecc_init() failed: %s.\n", wc_GetErrorString(ret));
+		goto out;
+        }
+        key_inited = 1;
 
-	if (!get_random_bytes(key, WG_KEY_LEN)) {
-		perror("getrandom");
-		return 1;
-	}
-	if (!strcmp(argv[0], "genkey"))
-		curve25519_clamp_secret(key);
+        ret = wc_InitRng(&rng);
+        if (ret) {
+		fprintf(stderr, "wc_InitRng() failed: %s.\n", wc_GetErrorString(ret));
+		goto out;
+        }
+        rng_inited = 1;
 
-	key_to_base64(base64, key);
-	puts(base64);
-	return 0;
+        ret = wc_ecc_make_key_ex(
+		&rng,
+		0 /* keysize -- use curve_id to designate the curve. */,
+		&key,
+		WG_CURVE_ID);
+        if (ret)
+		goto out;
+
+        {
+		word32 outLen = (word32)sizeof(exported_private);
+		PRIVATE_KEY_UNLOCK();
+		ret = wc_ecc_export_private_only(&key, exported_private, &outLen);
+		PRIVATE_KEY_LOCK();
+		if (ret) {
+			fprintf(stderr, "wc_ecc_export_private_only() returned error: %s.\n", wc_GetErrorString(ret));
+			goto out;
+		}
+		if (outLen != (word32)sizeof(exported_private)) {
+			fprintf(stderr, "wc_ecc_export_private_only() returned wrong size key %u.\n", outLen);
+			ret = WC_KEY_SIZE_E;
+			goto out;
+		}
+        }
+
+	if (!wg_to_base64(exported_private_base64, sizeof(exported_private_base64), exported_private, sizeof(exported_private))) {
+		fprintf(stderr, "wg_to_base64() failed.\n");
+		goto out;
+        }
+
+	puts(exported_private_base64);
+
+        ret = 0;
+
+out:
+
+	memset(exported_private, 0, sizeof(exported_private));
+	memset(exported_private_base64, 0, sizeof(exported_private_base64));
+        if (rng_inited)
+		wc_FreeRng(&rng);
+	if (key_inited)
+		wc_ecc_free(&key);
+
+        return ret;
 }

@@ -20,7 +20,7 @@
 
 int showconf_main(int argc, char *argv[])
 {
-	char base64[WG_KEY_LEN_BASE64];
+	char base64[WG_BASE64_LEN(WG_KEY_LEN_MAX)];
 	char ip[INET6_ADDRSTRLEN];
 	struct wgdevice *device = NULL;
 	struct wgpeer *peer;
@@ -43,15 +43,24 @@ int showconf_main(int argc, char *argv[])
 	if (device->fwmark)
 		printf("FwMark = 0x%x\n", device->fwmark);
 	if (device->flags & WGDEVICE_HAS_PRIVATE_KEY) {
-		key_to_base64(base64, device->private_key);
+		if (!wg_to_base64(base64, WG_BASE64_LEN(WG_PRIVATE_KEY_LEN), device->private_key, sizeof(device->private_key))) {
+			fprintf(stderr, "wg_to_base64() failed.\n");
+			return 1;
+		}
 		printf("PrivateKey = %s\n", base64);
 	}
 	printf("\n");
 	for_each_wgpeer(device, peer) {
-		key_to_base64(base64, peer->public_key);
+		if (!wg_to_base64(base64, WG_BASE64_LEN(WG_PUBLIC_KEY_LEN), peer->public_key, sizeof(peer->public_key))) {
+			fprintf(stderr, "wg_to_base64() failed.\n");
+			return 1;
+		}
 		printf("[Peer]\nPublicKey = %s\n", base64);
 		if (peer->flags & WGPEER_HAS_PRESHARED_KEY) {
-			key_to_base64(base64, peer->preshared_key);
+			if (!wg_to_base64(base64, WG_BASE64_LEN(WG_SYMMETRIC_KEY_LEN), peer->preshared_key, sizeof(peer->preshared_key))) {
+				fprintf(stderr, "wg_to_base64() failed.\n");
+				return 1;
+			}
 			printf("PresharedKey = %s\n", base64);
 		}
 		if (peer->first_allowedip)

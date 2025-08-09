@@ -14,7 +14,7 @@
 #include <sys/stat.h>
 #include <sys/un.h>
 
-#define SOCK_PATH RUNSTATEDIR "/wireguard/"
+#define SOCK_PATH RUNSTATEDIR "/wolfguard/"
 #define SOCK_SUFFIX ".sock"
 
 static FILE *userspace_interface_file(const char *iface)
@@ -61,7 +61,7 @@ out:
 	return f;
 }
 
-static bool userspace_has_wireguard_interface(const char *iface)
+static bool userspace_has_wolfguard_interface(const char *iface)
 {
 	struct stat sbuf;
 	struct sockaddr_un addr = { .sun_family = AF_UNIX };
@@ -88,7 +88,7 @@ static bool userspace_has_wireguard_interface(const char *iface)
 	return true;
 }
 
-static int userspace_get_wireguard_interfaces(struct string_list *list)
+static int userspace_get_wolfguard_interfaces(struct string_list *list)
 {
 	DIR *dir;
 	struct dirent *ent;
@@ -107,7 +107,7 @@ static int userspace_get_wireguard_interfaces(struct string_list *list)
 		if (strncmp(end, SOCK_SUFFIX, strlen(SOCK_SUFFIX)))
 			continue;
 		*end = '\0';
-		if (!userspace_has_wireguard_interface(ent->d_name))
+		if (!userspace_has_wolfguard_interface(ent->d_name))
 			continue;
 		ret = string_list_add(list, ent->d_name);
 		if (ret < 0)

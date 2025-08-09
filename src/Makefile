@@ -48,9 +48,9 @@ CFLAGS += -DRUNSTATEDIR="\"$(RUNSTATEDIR)\""
 ifeq ($(DEBUG),yes)
 CFLAGS += -g
 endif
-WIREGUARD_TOOLS_VERSION = $(patsubst v%,%,$(shell GIT_CEILING_DIRECTORIES="$(PWD)/../.." git describe --dirty 2>/dev/null))
-ifneq ($(WIREGUARD_TOOLS_VERSION),)
-CFLAGS += -D'WIREGUARD_TOOLS_VERSION="$(WIREGUARD_TOOLS_VERSION)"'
+WOLFGUARD_TOOLS_VERSION = $(patsubst v%,%,$(shell GIT_CEILING_DIRECTORIES="$(PWD)/../.." git describe --dirty 2>/dev/null))
+ifneq ($(WOLFGUARD_TOOLS_VERSION),)
+CFLAGS += -D'WOLFGUARD_TOOLS_VERSION="$(WOLFGUARD_TOOLS_VERSION)"'
 endif
 ifeq ($(PLATFORM),haiku)
 LDLIBS += -lnetwork -lbsd
@@ -62,14 +62,12 @@ LDLIBS += -lws2_32
 wg: wincompat/libc.o wincompat/init.o
 endif
 
-ifdef WOLFCRYPT
 ifdef WOLFSSL_ROOT
-CFLAGS += -DUSE_WOLFCRYPT -I$(WOLFSSL_ROOT)
-LDLIBS += -L$(WOLFSSL_ROOT)/src/.libs -lwolfssl
+CFLAGS += -I$(WOLFSSL_ROOT)/include -I$(WOLFSSL_ROOT)
+LDLIBS += -L$(WOLFSSL_ROOT)/src/.libs -L$(WOLFSSL_ROOT)/lib -lwolfssl
 else
-CFLAGS += -DUSE_WOLFCRYPT $(shell PKG_CONFIG_PATH=/usr/local/lib/pkgconfig:${PKG_CONFIG_PATH} $(PKG_CONFIG) --cflags wolfssl)
+CFLAGS += $(shell PKG_CONFIG_PATH=/usr/local/lib/pkgconfig:${PKG_CONFIG_PATH} $(PKG_CONFIG) --cflags wolfssl)
 LDLIBS += $(shell PKG_CONFIG_PATH=/usr/local/lib/pkgconfig:${PKG_CONFIG_PATH} $(PKG_CONFIG) --libs wolfssl)
-endif
 endif
 
 ifneq ($(V),1)
@@ -83,11 +81,7 @@ BUILT_IN_RM := $(RM)
 RM := @a() { echo "  CLEAN   $$@"; $(BUILT_IN_RM) "$$@"; }; a
 endif
 
-ifdef WOLFCRYPT
-wg: $(sort $(patsubst %.c,%.o,wolfcrypto_shim.c $(filter-out curve25519.c genkey.c, $(wildcard *.c))))
-else
 wg: $(sort $(patsubst %.c,%.o,$(filter-out wolfcrypto_shim.c, $(wildcard *.c))))
-endif
 
 clean:
 	$(RM) wg *.o *.d
