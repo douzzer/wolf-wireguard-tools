@@ -19,8 +19,10 @@ int pubkey_main(int argc, char *argv[])
 	uint8_t key[WG_KEY_LEN_MAX];
 	char base64[WG_BASE64_LEN(WG_KEY_LEN_MAX)];
 	int trailing_char;
-        ecc_key key_ecc;
+	ecc_key key_ecc;
 	int key_ecc_inited;
+	WC_RNG rng;
+	int rng_inited = 0;
 	int ret = 1;
 
 	if (argc != 1) {
@@ -64,9 +66,22 @@ int pubkey_main(int argc, char *argv[])
 		goto out;
 	}
 
-        {
+	ret = wc_InitRng(&rng);
+	if (ret) {
+		fprintf(stderr, "wc_InitRng() returned error: %s.\n", wc_GetErrorString(ret));
+		goto out;
+	}
+	rng_inited = 1;
+
+	ret = wc_ecc_make_pub_ex(&key_ecc, NULL /* pubOut */, &rng);
+	if (ret) {
+		fprintf(stderr, "wc_ecc_make_pub_ex() returned error: %s.\n", wc_GetErrorString(ret));
+		goto out;
+	}
+
+	{
 		word32 outLen = (word32)sizeof(key);
-		PRIVATE_KEY_UNLOCK();
+		PRIVATE_KEY_UNLOCK(); /* should not be needed, but is... */
 		ret = wc_ecc_export_x963(&key_ecc, key, &outLen);
 		PRIVATE_KEY_LOCK();
 		if (ret) {
@@ -91,6 +106,8 @@ out:
 
 	if (key_ecc_inited)
                 wc_ecc_free(&key_ecc);
+        if (rng_inited)
+		wc_FreeRng(&rng);
 	memset(key, 0, sizeof(key));
 	memset(base64, 0, sizeof(base64));
 

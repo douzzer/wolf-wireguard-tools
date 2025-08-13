@@ -44,7 +44,6 @@ static inline bool wg_from_base64(uint8_t *raw, size_t raw_len, const char *base
     if ((raw_len > UINT_MAX) || (base64_len > UINT_MAX))
         return false;
     raw_len_out = (word32)raw_len;
-fprintf(stderr, "base64_len=%zu raw_len_out=%u\n", base64_len, raw_len_out);
     ret = Base64_Decode((byte *)base64, base64_len, raw, &raw_len_out);
     if (ret != 0) {
         fprintf(stderr, "Base64_Decode() returned error: %s.\n", wc_GetErrorString(ret));
