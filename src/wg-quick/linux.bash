@@ -40,7 +40,7 @@ die() {
 parse_options() {
 	local interface_section=0 line key value stripped v
 	CONFIG_FILE="$1"
-	[[ $CONFIG_FILE =~ ^[a-zA-Z0-9_=+.-]{1,15}$ ]] && CONFIG_FILE="/etc/wireguard/$CONFIG_FILE.conf"
+	[[ $CONFIG_FILE =~ ^[a-zA-Z0-9_=+.-]{1,15}$ ]] && CONFIG_FILE="/etc/wolfguard/$CONFIG_FILE.conf"
 	[[ -e $CONFIG_FILE ]] || die "\`$CONFIG_FILE' does not exist"
 	[[ $CONFIG_FILE =~ (^|/)([a-zA-Z0-9_=+.-]{1,15})\.conf$ ]] || die "The config file must be a valid interface name, followed by .conf"
 	CONFIG_FILE="$(readlink -f "$CONFIG_FILE")"
@@ -87,11 +87,11 @@ auto_su() {
 
 add_if() {
 	local ret
-	if ! cmd ip link add "$INTERFACE" type wireguard; then
+	if ! cmd ip link add "$INTERFACE" type wolfguard; then
 		ret=$?
-		[[ -e /sys/module/wireguard ]] || ! command -v "${WG_QUICK_USERSPACE_IMPLEMENTATION:-wireguard-go}" >/dev/null && exit $ret
-		echo "[!] Missing WireGuard kernel module. Falling back to slow userspace implementation." >&2
-		cmd "${WG_QUICK_USERSPACE_IMPLEMENTATION:-wireguard-go}" "$INTERFACE"
+		[[ -e /sys/module/wolfguard ]] || ! command -v "${WG_QUICK_USERSPACE_IMPLEMENTATION:-wolfguard-go}" >/dev/null && exit $ret
+		echo "[!] Missing WolfGuard kernel module. Falling back to slow userspace implementation." >&2
+		cmd "${WG_QUICK_USERSPACE_IMPLEMENTATION:-wolfguard-go}" "$INTERFACE"
 	fi
 }
 
@@ -302,7 +302,7 @@ cmd_usage() {
 
 	  CONFIG_FILE is a configuration file, whose filename is the interface name
 	  followed by \`.conf'. Otherwise, INTERFACE is an interface name, with
-	  configuration found at /etc/wireguard/INTERFACE.conf. It is to be readable
+	  configuration found at /etc/wolfguard/INTERFACE.conf. It is to be readable
 	  by wg(8)'s \`setconf' sub-command, with the exception of the following additions
 	  to the [Interface] section, which are handled by $PROGRAM:
 
@@ -343,7 +343,7 @@ cmd_up() {
 }
 
 cmd_down() {
-	[[ " $(wg show interfaces) " == *" $INTERFACE "* ]] || die "\`$INTERFACE' is not a WireGuard interface"
+	[[ " $(wg show interfaces) " == *" $INTERFACE "* ]] || die "\`$INTERFACE' is not a WolfGuard interface"
 	execute_hooks "${PRE_DOWN[@]}"
 	[[ $SAVE_CONFIG -eq 0 ]] || save_config
 	del_if
@@ -353,7 +353,7 @@ cmd_down() {
 }
 
 cmd_save() {
-	[[ " $(wg show interfaces) " == *" $INTERFACE "* ]] || die "\`$INTERFACE' is not a WireGuard interface"
+	[[ " $(wg show interfaces) " == *" $INTERFACE "* ]] || die "\`$INTERFACE' is not a WolfGuard interface"
 	save_config
 }
 
