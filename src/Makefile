@@ -70,6 +70,10 @@ CFLAGS += $(shell PKG_CONFIG_PATH=/usr/local/lib/pkgconfig:${PKG_CONFIG_PATH} $(
 LDLIBS += $(shell PKG_CONFIG_PATH=/usr/local/lib/pkgconfig:${PKG_CONFIG_PATH} $(PKG_CONFIG) --libs wolfssl)
 endif
 
+ifdef WOLFGUARD_KM_ROOT
+CFLAGS += -I$(WOLFGUARD_KM_ROOT)/src -DHAVE_WOLFGUARD_KM_ROOT
+endif
+
 ifneq ($(V),1)
 BUILT_IN_LINK.o := $(LINK.o)
 LINK.o = @echo "  LD      $@";

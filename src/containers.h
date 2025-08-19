@@ -13,7 +13,11 @@
 #include <net/if.h>
 #include <netinet/in.h>
 #if defined(__linux__)
+#ifdef HAVE_WOLFGUARD_KM_ROOT
+#include <uapi/wolfguard.h>
+#else
 #include <linux/wolfguard.h>
+#endif
 #elif defined(__OpenBSD__)
 #include <net/if_wg.h>
 #endif

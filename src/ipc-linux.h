@@ -17,7 +17,11 @@
 #include <linux/if_link.h>
 #include <linux/netlink.h>
 #include <linux/rtnetlink.h>
+#ifdef HAVE_WOLFGUARD_KM_ROOT
+#include <uapi/wolfguard.h>
+#else
 #include <linux/wolfguard.h>
+#endif
 #include <netinet/in.h>
 #include "containers.h"
 #include "encoding.h"
