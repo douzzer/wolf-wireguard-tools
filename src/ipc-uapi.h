@@ -14,9 +14,11 @@
 #include <string.h>
 #include <sys/socket.h>
 #include "containers.h"
-#include "curve25519.h"
 #include "encoding.h"
 #include "ctype.h"
+
+#include <wolfssl/wolfcrypt/ecc.h>
+#include <wolfssl/wolfcrypt/random.h>
 
 #ifdef _WIN32
 #include "ipc-uapi-windows.h"
@@ -171,6 +173,71 @@ out:
 	num; \
 })
 
+static int wc_ecc_private_to_public_exim(const byte *private, const size_t private_len,
+                                  byte *public, const size_t public_len,
+                                  const int curve_id)
+{
+        ecc_key *key = NULL;
+        int key_inited = 0;
+        int ret;
+
+        if ((private_len > UINT_MAX) ||
+            (public_len > UINT_MAX))
+        {
+            return BAD_FUNC_ARG;
+        }
+
+        key = (ecc_key *)malloc(sizeof(*key));
+        if (! key) {
+            ret = MEMORY_E;
+            goto out;
+        }
+        ret = wc_ecc_init(key);
+        if (ret)
+            goto out;
+        key_inited = 1;
+
+        ret = wc_ecc_import_private_key_ex(private, (word32)private_len,
+                                           NULL, 0, key, curve_id);
+        if (ret)
+            goto out;
+
+        {
+            WC_RNG rng;
+            ret = wc_InitRng(&rng);
+            if (ret != 0)
+                goto out;
+            ret = wc_ecc_make_pub_ex(key, NULL /* pubOut */, &rng);
+            wc_FreeRng(&rng);
+        }
+
+        if (ret)
+            goto out;
+
+        {
+            word32 outLen = (word32)public_len;
+            PRIVATE_KEY_UNLOCK();
+            ret = wc_ecc_export_x963(key, public, &outLen);
+            PRIVATE_KEY_LOCK();
+            if (ret)
+                goto out;
+            if (outLen != (word32)public_len) {
+                ret = WC_KEY_SIZE_E;
+                goto out;
+            }
+        }
+
+out:
+
+        if (key) {
+            if (key_inited)
+                wc_ecc_free(key);
+            free(key);
+        }
+
+        return ret;
+}
+
 static int userspace_get_device(struct wgdevice **out, const char *iface)
 {
 	struct wgdevice *dev;
@@ -212,8 +279,11 @@ static int userspace_get_device(struct wgdevice **out, const char *iface)
 		if (!peer && !strcmp(key, "private_key")) {
 			if (!wg_from_hex(dev->private_key, sizeof(dev->private_key), value, value_len))
 				break;
-			curve25519_generate_public(dev->public_key, dev->private_key);
-			dev->flags |= WGDEVICE_HAS_PRIVATE_KEY | WGDEVICE_HAS_PUBLIC_KEY;
+			dev->flags |= WGDEVICE_HAS_PRIVATE_KEY;
+                        if (wc_ecc_private_to_public_exim(dev->private_key, sizeof(dev->private_key),
+                                                          dev->public_key, sizeof(dev->public_key),
+                                                          WG_CURVE_ID) == 0)
+			dev->flags |= WGDEVICE_HAS_PUBLIC_KEY;
 		} else if (!peer && !strcmp(key, "listen_port")) {
 			dev->listen_port = NUM(0xffffU);
 			dev->flags |= WGDEVICE_HAS_LISTEN_PORT;
