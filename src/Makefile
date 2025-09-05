@@ -74,6 +74,14 @@ ifdef WOLFGUARD_KM_ROOT
 CFLAGS += -I$(WOLFGUARD_KM_ROOT)/src -DHAVE_WOLFGUARD_KM_ROOT
 endif
 
+ifdef EXTRA_CFLAGS
+CFLAGS += $(EXTRA_CFLAGS)
+endif
+
+ifdef EXTRA_LDFLAGS
+LDFLAGS += $(EXTRA_LDFLAGS)
+endif
+
 ifneq ($(V),1)
 BUILT_IN_LINK.o := $(LINK.o)
 LINK.o = @echo "  LD      $@";
